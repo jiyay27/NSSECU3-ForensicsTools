@@ -12,6 +12,6 @@
 
 ## Dependencies:
 
-1\. .NET Framework 6.0
-2\. Openpyxl
-3\. Ensure Python 3.12
+1. .NET Framework 6.0
+2. Openpyxl
+3. Ensure Python 3.12
