@@ -1,7 +1,5 @@
 # **Forensic Tool Combination**
 
-\---
-
 ### Combines EvtxECmd + RECmd + PECmd
 
 ####   
