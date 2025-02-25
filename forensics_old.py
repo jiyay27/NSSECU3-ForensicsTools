@@ -4,19 +4,21 @@ import pandas as pd
 import subprocess
 from datetime import datetime, timedelta, timezone
 utc_now = datetime.now(timezone.utc)
-day_scope = utc_now - timedelta(days=40)
+day_scope = utc_now - timedelta(days=30)
 day_scope = day_scope.strftime("%Y-%m-%d %H:%M:%S")
 
 EVTXECMD_PATH = "EvtxECmd\\EvtxECmd.exe"
 RECMD_PATH = "RECmd\\RECmd.exe"
 PECMD_PATH = "PECmd\\PECmd.exe"
 
-EVTX_INPUT_FILE = None
-REGISTRY_INPUT_FILE = None
+EVTX_INPUT_FILE = "OAlerts.evtx"
+REGISTRY_INPUT_FILE = "SOFTWARE"
 REGISTRY_BATCH_FILE = "RECmd\\BatchExamples\\SoftwareASEPs.reb"
-PREFETCH_INPUT_FILE = None
+PREFETCH_INPUT_FILE = "XMIND.EXE-A9C728F9.pf"
 
-OUTPUT_DIR = os.path.dirname(os.path.abspath(__file__))
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+
+OUTPUT_DIR = SCRIPT_DIR
 
 EVTX_CSV_PATH = OUTPUT_DIR
 REGISTRY_CSV_PATH = OUTPUT_DIR
@@ -29,10 +31,10 @@ PECMD_OUT_FILE_NAME = "prefetch_output.csv"
 PECMD2_OUT_FILE_NAME = "prefetch_output_Timeline.csv"
 FINAL_OUT_FILE_NAME = "forensic_output_merged.xlsx"
 
-# Make sure the output directory exists
+
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-def run_evtxecmd(EVTX_INPUT_FILE):
+def run_evtxecmd():
     command = f'"{EVTXECMD_PATH}" -f "{EVTX_INPUT_FILE}" --sd "{day_scope}" --csv {EVTX_CSV_PATH} --csvf {EVTX_OUT_FILE_NAME}' #--maps "{EVTXECMD_PATH}\\Maps"'
     try:
         print(f'"Running EvtxECmd to parse {EVTX_INPUT_FILE}..."')
@@ -51,7 +53,8 @@ def run_evtxecmd(EVTX_INPUT_FILE):
     except TimeoutError as e:
         print(f"Timeout error: {e}")
 
-def run_recmd(REGISTRY_INPUT_FILE, REGISTRY_BATCH_FILE):
+
+def run_recmd():
     recmd_command = f'"{RECMD_PATH}" -f "{REGISTRY_INPUT_FILE}" --bn "{REGISTRY_BATCH_FILE}" --csv {REGISTRY_CSV_PATH} --csvf {RECMD_OUT_FILE_NAME}'
 
     try:
@@ -61,7 +64,7 @@ def run_recmd(REGISTRY_INPUT_FILE, REGISTRY_BATCH_FILE):
     except subprocess.CalledProcessError as e:
         print(f"Error running RECmd: {e}")
 
-def run_pecmd(PREFETCH_INPUT_FILE):
+def run_pecmd():
     command = f'"{PECMD_PATH}" -f "{PREFETCH_INPUT_FILE}" --csv {PREFETCH_CSV_PATH} --csvf {PECMD_OUT_FILE_NAME}'
 
     try:
@@ -116,6 +119,7 @@ def create_forensic_timeline():
     else:
         print("Error creating forensic timeline")
 
+
     # If the file exists, remove it since we already have the Final output file
     if os.path.exists(EVTX_OUT_FILE_NAME):
         os.remove(EVTX_OUT_FILE_NAME)
@@ -126,129 +130,14 @@ def create_forensic_timeline():
     if os.path.exists(PECMD2_OUT_FILE_NAME):
         os.remove(PECMD2_OUT_FILE_NAME)
 
-def getBatchFileFilters():
-    directory = ".\\RECmd\\BatchExamples\\"
-    batch_files = []
-
-    for file in os.listdir(directory):
-        if file.endswith(".reb"):
-            batch_files.append(file)
-
-    print("--- Batch File Filter Options ---")
-    for file in batch_files:
-        print(file);
-    print("---            END            ---\n")
-
-def check_path_exists(path):
-    if os.path.exists(path):
-        if os.path.isfile(path):
-            return path
-        elif os.path.isdir(path):
-            return path
-    return "Not Found"
-
-def getFileInputDirectory(evtx_dir, pf_dir, reg_dir):
-    
-    print("\n--- Detected Directory Files ---")
-    print("EVTX dir: " + check_path_exists(evtx_dir))
-    print("PF dir: " + check_path_exists(pf_dir))
-    print("REG dir: " + check_path_exists(reg_dir))
-    print("---       END      ---\n")
-
-    if check_path_exists(pf_dir) != "Not Found":
-        return 1
-    else:
-        return 0
-
-def getFileInputNames():
-    directory = os.path.dirname(os.path.abspath(__file__))
-
-    evtx_file = None
-    pf_file = None
-    reg_file = None
-
-    for file in os.listdir(directory):
-        if os.path.isfile(os.path.join(directory, file)):  # Ensure it's a file, not a folder
-            if file.endswith(".evtx"):
-                evtx_file = file
-            elif file.endswith(".pf"):
-                pf_file = file
-            elif "." not in file:
-                reg_file = file
-
-    print("\n--- Detected Files ---")
-    print("EVTX File:", evtx_file if evtx_file else "Not Found")
-    print("PF File:", pf_file if pf_file else "Not Found")
-    print("REG File:", reg_file if reg_file else "Not Found")
-    print("---       END      ---\n")
-
-    return evtx_file, pf_file, reg_file
-
-def getUserInputBatchFilters():
-    getBatchFileFilters()
-    bn_filter = input("Batch File Filter: ")
-    if bn_filter == "0":
-        print("Exiting...")
-        os._exit(0);
-    return (".\\RECmd\\BatchExamples\\" + bn_filter)
-
-def runAllTools1(EVTX_INPUT_FILE, PREFETCH_INPUT_FILE,  REGISTRY_INPUT_FILE, REGISTRY_BATCH_FILE):
-    run_evtxecmd(EVTX_INPUT_FILE)
-    run_recmd(REGISTRY_INPUT_FILE, REGISTRY_BATCH_FILE)
-    run_pecmd(PREFETCH_INPUT_FILE)
-    create_forensic_timeline()
-
-def header():
-    print("--- NSSECU3 Forensics Tool ---")
-    print("[1] Scan Files in Current Directory")
-    print("[2] Scan Files in User Specified Directory")
-    print("[3] Exit")
-    print("--- ---------------------- ---")
-
-def main():
-    header()
-    val = input("Input: ")
-
-    if val == "1":
-        print("\nScanning files in current directory...")
-        time.sleep(1)
-        EVTX_INPUT_FILE, PREFETCH_INPUT_FILE,  REGISTRY_INPUT_FILE = getFileInputNames()
-        time.sleep(1)
-        REGISTRY_BATCH_FILE = getUserInputBatchFilters()
-        runAllTools1(EVTX_INPUT_FILE, PREFETCH_INPUT_FILE,  REGISTRY_INPUT_FILE, REGISTRY_BATCH_FILE)
-        
-    if val == "2":
-        print("\nNOTE: Ensure that LIVE files are not scanned as the EvtxECmd Tool does not allow it.")
-        print("Also, write the directory name with no quotation marks (\"\") or double backslashes (\\\\).\n")
-
-        print("--- Specify User Directory ---")
-
-        # "C:\Windows\System32\winevt\Logs\Internet Explorer.evtx" - sample dir
-        evtx_dir = input("EVTX Directory: ")
-
-        # "C:\Windows\Prefetch\WSL.EXE-1B26B53B.pf" - sample dir
-        pf_dir = input("PF Directory: ")
-
-        # "C:\Windows\System32\config\SOFTWARE" - sample dir
-        reg_dir = input("REG Directory: ")
-
-        print("Scanning directory for specific files...")
-        time.sleep(1)
-        out = getFileInputDirectory(evtx_dir, pf_dir, reg_dir)
-        time.sleep(1)
-
-        if out == 1:
-            REGISTRY_BATCH_FILE = getUserInputBatchFilters()
-        else:
-            REGISTRY_BATCH_FILE = 0
-            print("No registry batch file found.")
-            print("Filters will not be used.")
-
-        runAllTools1(evtx_dir, pf_dir,  reg_dir, REGISTRY_BATCH_FILE)
-
-    if val == "3":
-        print("Exiting...")
-        os._exit(0);
 
 if __name__ == "__main__":
-    main()
+    # TODO: Take input from user for specific files
+
+
+    # TODO: Refactor functions so that they can take input parameters
+    run_evtxecmd()
+    run_recmd()
+    run_pecmd()
+    
+    create_forensic_timeline()
