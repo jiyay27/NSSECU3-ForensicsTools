@@ -5,24 +5,25 @@ import os
 from datetime import datetime, timedelta
 
 LECMD_PATH = "LECmd\\LECmd.exe"
-RECMD_PATH = "SBECmd\\SBECmd.exe"
+SBECMD_PATH = "SBECmd\\SBECmd.exe"
 PECMD_PATH = "PECmd\\PECmd.exe"
 
 LECMD_INPUT_FILE = None # folder for multiple files
-REGISTRY_INPUT_FILE = None # single file
+SBECMD_INPUT_FILE = None # single file
 SBECMD_INPUT_DIR = os.path.dirname(os.path.abspath(__file__))
 PECMD_INPUT_FILE = None # single file
 
 OUTPUT_DIR = os.path.dirname(os.path.abspath(__file__))
 
 LECMD_CSV_PATH = OUTPUT_DIR
-REGISTRY_CSV_PATH = OUTPUT_DIR
+SBECMD_CSV_PATH = OUTPUT_DIR
 PECMD_CSV_PATH = OUTPUT_DIR
 FINAL_CSV_PATH = OUTPUT_DIR
 
 LECMD_OUT_FILE_NAME = "link_output.csv"
 RECMD_OUT_FILE_NAME = "shellb_output.csv"
 PECMD_OUT_FILE_NAME = "prefetch_output.csv"
+PECMD_OUT_FILE_NAME2 = "prefetch_output_Timeline.csv"
 FINAL_OUT_FILE_NAME = "timeline_output_merged.xlsx"
 
 # Function to run external command
@@ -76,7 +77,7 @@ def getFileInputNames():
 
     pref_file = None
     ln_file = None
-    reg_file = None
+    shell_file = None
 
     for file in os.listdir(directory):
         if os.path.isfile(os.path.join(directory, file)):  # Ensure it's a file, not a folder
@@ -85,24 +86,24 @@ def getFileInputNames():
             elif file.endswith(".pf"):
                 pref_file = file
             elif "." not in file:
-                reg_file = file
+                shell_file = file
 
     print("\n--- Detected Files ---")
     print("LINK File:", OUTPUT_DIR if ln_file else "Not Found")
-    print("HIVE File:", reg_file if reg_file else "Not Found")
+    print("USR File:", shell_file if shell_file else "Not Found")
     print("PREF File:", pref_file if pref_file else "Not Found")
     print("---       END      ---\n")
 
-    return ln_file, reg_file, pref_file
+    return ln_file, shell_file, pref_file
 
 # Function to run RECmd and process registry data
-def run_sbecmd(REGISTRY_INPUT_FILE):
-    sbecmd_command = RECMD_PATH + " -d " + SBECMD_INPUT_DIR + " --csv " + REGISTRY_CSV_PATH + " --csvf " + RECMD_OUT_FILE_NAME
+def run_sbecmd(SBECMD_INPUT_FILE):
+    sbecmd_command = SBECMD_PATH + " -d " + SBECMD_INPUT_DIR + " --csv " + SBECMD_CSV_PATH + " --csvf " + RECMD_OUT_FILE_NAME
 
     try:
-        print(f"Running SBECmd on {REGISTRY_INPUT_FILE}...")
+        print(f"Running SBECmd on {SBECMD_INPUT_FILE}...")
         subprocess.run(sbecmd_command, shell=True, check=True)
-        print(f"Shellbags parsed successfully! Output saved to: {REGISTRY_CSV_PATH}")
+        print(f"Shellbags parsed successfully! Output saved to: {SBECMD_CSV_PATH}")
     except subprocess.CalledProcessError as e:
         print(f"Error running RECmd: {e}")
 
@@ -138,41 +139,62 @@ def run_lecmd(LNK_INPUT_DIR):
     except subprocess.CalledProcessError as e:
         print(f"Error running LECmd: {e}")
 
+def get_latest_shellb_output_file(directory="."):
+    latest_file = None
+    latest_mtime = 0
+
+    for file in os.listdir(directory):
+        file_path = os.path.join(directory, file)
+        if "shellb_output.csv" in file and os.path.isfile(file_path):
+            file_mtime = os.path.getmtime(file_path)
+            if file_mtime > latest_mtime:
+                latest_file = file_path
+                latest_mtime = file_mtime
+
+    if latest_file:
+        print(f"Using latest file: {latest_file}")
+    else:
+        print("No 'shellb_output.csv' files found.")
+
+    return latest_file
+
 def adjust_column_widths(writer, df, sheet_name):
     worksheet = writer.sheets[sheet_name]
     for i, col in enumerate(df.columns):
         max_len = max(df[col].astype(str).map(len).max(), len(col)) + 2
         worksheet.set_column(i, i, max_len)
 
-
 def create_timeline(output_dir):
     # Ensure output directory exists
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
 
+    sbecmd_csv = get_latest_shellb_output_file()
+    PECMD_OUT_FILE_NAME = PECMD_OUT_FILE_NAME2
+
     # Set final output filename inside the given directory
     output_file = os.path.join(output_dir, "forensic_timeline.xlsx")
 
     # Validate CSV files to ensure they are actual files, not directories
-    recmd_csv = RECMD_OUT_FILE_NAME if os.path.isfile(RECMD_OUT_FILE_NAME) else None
+    sbecmd_csv = sbecmd_csv if os.path.isfile(sbecmd_csv) else None
     pecmd_csv = PECMD_OUT_FILE_NAME if os.path.isfile(PECMD_OUT_FILE_NAME) else None
     lecmd_csv = LECMD_OUT_FILE_NAME if os.path.isfile(LECMD_OUT_FILE_NAME) else None
 
     # Display warnings if any file is missing
-    if not recmd_csv:
-        print(f"Warning: RECmd CSV file is missing or invalid: {recmd_csv}")
+    if not sbecmd_csv:
+        print(f"Warning: RECmd CSV file is missing or invalid: {sbecmd_csv}")
     if not pecmd_csv:
         print(f"Warning: PECmd CSV file is missing or invalid: {pecmd_csv}")
     if not lecmd_csv:
         print(f"Warning: LECmd CSV file is missing or invalid: {lecmd_csv}")
 
     # Read only valid CSV files
-    df_recmd = pd.read_csv(recmd_csv) if recmd_csv else pd.DataFrame()
+    df_sbecmd = pd.read_csv(sbecmd_csv) if sbecmd_csv else pd.DataFrame()
     df_pecmd = pd.read_csv(pecmd_csv) if pecmd_csv else pd.DataFrame()
     df_lecmd = pd.read_csv(lecmd_csv) if lecmd_csv else pd.DataFrame()
 
     # Merge DataFrames
-    final_df = pd.concat([df_recmd, df_pecmd, df_lecmd], ignore_index=True)
+    final_df = pd.concat([df_sbecmd, df_pecmd, df_lecmd], ignore_index=True)
 
     # Check if 'Timestamp' column exists
     if 'Timestamp' not in final_df.columns:
@@ -194,17 +216,17 @@ def create_timeline(output_dir):
     print(f"Timeline saved to {output_file}")
     
     # Delete the original CSV files
-    for csv_file in [recmd_csv, pecmd_csv, lecmd_csv]:
+    for csv_file in [sbecmd_csv, pecmd_csv, lecmd_csv]:
         if csv_file and os.path.exists(csv_file):
             os.remove(csv_file)
             print(f"Deleted {csv_file}")
 
 
 
-def runAllTools1(LECMD_INPUT_FILE, PECMD_INPUT_FILE, REGISTRY_INPUT_FILE):
-    #run_lecmd(LECMD_INPUT_FILE)
-    run_sbecmd(REGISTRY_INPUT_FILE)
-    #run_pecmd(PECMD_INPUT_FILE)
+def runAllTools1(LECMD_INPUT_FILE, PECMD_INPUT_FILE, SBECMD_INPUT_FILE):
+    run_lecmd(LECMD_INPUT_FILE)
+    run_sbecmd(SBECMD_INPUT_FILE)
+    run_pecmd(PECMD_INPUT_FILE)
     #create_timeline(FINAL_CSV_PATH)
 
 
@@ -224,10 +246,10 @@ def main():
     if val == "1":
         print("\nScanning files in current directory...")
         time.sleep(1)
-        LECMD_INPUT_FILE, REGISTRY_INPUT_FILE,  PECMD_INPUT_FILE = getFileInputNames()
+        LECMD_INPUT_FILE, SBECMD_INPUT_FILE,  PECMD_INPUT_FILE = getFileInputNames()
         print(LECMD_INPUT_FILE)
         time.sleep(1)
-        runAllTools1(LECMD_INPUT_FILE, PECMD_INPUT_FILE, REGISTRY_INPUT_FILE)
+        runAllTools1(LECMD_INPUT_FILE, PECMD_INPUT_FILE, SBECMD_INPUT_FILE)
     
     if val == "2":
         print("\nNOTE: Ensure that LIVE files are not scanned as the EvtxECmd Tool does not allow it.")
