@@ -1,8 +1,6 @@
 import time
-import pandas as pd
 import subprocess
 import os
-from datetime import datetime, timedelta
 
 LECMD_PATH = "LECmd\\LECmd.exe"
 SBECMD_PATH = "SBECmd\\SBECmd.exe"
@@ -25,31 +23,6 @@ RECMD_OUT_FILE_NAME = "shellb_output.csv"
 PECMD_OUT_FILE_NAME = "prefetch_output.csv"
 PECMD_OUT_FILE_NAME2 = "prefetch_output_Timeline.csv"
 FINAL_OUT_FILE_NAME = "timeline_output_merged.xlsx"
-
-# Function to run external command
-def run_command(command):
-    try:
-        print(f"Running: {command}")
-        subprocess.run(command, shell=True, check=True)
-        print("Command executed successfully!")
-    except subprocess.CalledProcessError as e:
-        print(f"Error running command: {e}")
-
-def convert_to_utc(timestamp):
-        try:
-            dt = datetime.strptime(timestamp, "%Y-%m-%d %H:%M:%S")
-            return dt.strftime("%Y-%m-%d %H:%M:%S")  # Normalize to UTC+0000
-        except:
-            return timestamp  # Return as-is if parsing fails
-
-def convert_to_utc8(timestamp):
-    try:
-        dt = datetime.strptime(timestamp, "%Y-%m-%d %H:%M:%S")
-        dt_utc8 = dt + timedelta(hours=8)
-        return dt_utc8.strftime("%Y-%m-%d %H:%M:%S")
-    except:
-        return timestamp  # Return as-is if parsing fails
-
 
 def check_path_exists(path):
     if os.path.exists(path):
