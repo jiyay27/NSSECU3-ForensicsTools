@@ -5,12 +5,12 @@ import os
 from datetime import datetime, timedelta
 
 LECMD_PATH = "LECmd\\LECmd.exe"
-RECMD_PATH = "RECmd\\RECmd.exe"
+RECMD_PATH = "SBECmd\\SBECmd.exe"
 PECMD_PATH = "PECmd\\PECmd.exe"
 
 LECMD_INPUT_FILE = None # folder for multiple files
 REGISTRY_INPUT_FILE = None # single file
-REGISTRY_BATCH_FILE = "RECmd\\BatchExamples\\SoftwareASEPs.reb"
+SBECMD_INPUT_DIR = os.path.dirname(os.path.abspath(__file__))
 PECMD_INPUT_FILE = None # single file
 
 OUTPUT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -21,7 +21,7 @@ PECMD_CSV_PATH = OUTPUT_DIR
 FINAL_CSV_PATH = OUTPUT_DIR
 
 LECMD_OUT_FILE_NAME = "link_output.csv"
-RECMD_OUT_FILE_NAME = "registry_output.csv"
+RECMD_OUT_FILE_NAME = "shellb_output.csv"
 PECMD_OUT_FILE_NAME = "prefetch_output.csv"
 FINAL_OUT_FILE_NAME = "timeline_output_merged.xlsx"
 
@@ -48,27 +48,7 @@ def convert_to_utc8(timestamp):
         return dt_utc8.strftime("%Y-%m-%d %H:%M:%S")
     except:
         return timestamp  # Return as-is if parsing fails
-    
-def getBatchFileFilters():
-    directory = ".\\RECmd\\BatchExamples\\"
-    batch_files = []
 
-    for file in os.listdir(directory):
-        if file.endswith(".reb"):
-            batch_files.append(file)
-
-    print("--- Batch File Filter Options ---")
-    for file in batch_files:
-        print(file);
-    print("---            END            ---\n")
-
-def getUserInputBatchFilters():
-    getBatchFileFilters()
-    bn_filter = input("Batch File Filter: ")
-    if bn_filter == "0":
-        print("Exiting...")
-        os._exit(0);
-    return (".\\RECmd\\BatchExamples\\" + bn_filter)
 
 def check_path_exists(path):
     if os.path.exists(path):
@@ -116,19 +96,19 @@ def getFileInputNames():
     return ln_file, reg_file, pref_file
 
 # Function to run RECmd and process registry data
-def run_recmd(REGISTRY_INPUT_FILE, REGISTRY_BATCH_FILE):
-    recmd_command = f'"{RECMD_PATH}" -f "{REGISTRY_INPUT_FILE}" --bn "{REGISTRY_BATCH_FILE}" --csv {REGISTRY_CSV_PATH} --csvf {RECMD_OUT_FILE_NAME}'
+def run_sbecmd(REGISTRY_INPUT_FILE):
+    sbecmd_command = RECMD_PATH + " -d " + SBECMD_INPUT_DIR + " --csv " + REGISTRY_CSV_PATH + " --csvf " + RECMD_OUT_FILE_NAME
 
     try:
-        print(f"Running RECmd on {REGISTRY_INPUT_FILE}...")
-        subprocess.run(recmd_command, shell=True, check=True)
-        print(f"Registry parsed successfully! Output saved to: {REGISTRY_CSV_PATH}")
+        print(f"Running SBECmd on {REGISTRY_INPUT_FILE}...")
+        subprocess.run(sbecmd_command, shell=True, check=True)
+        print(f"Shellbags parsed successfully! Output saved to: {REGISTRY_CSV_PATH}")
     except subprocess.CalledProcessError as e:
         print(f"Error running RECmd: {e}")
 
 # Function to run AmcacheParser and process execution history
 def run_pecmd(PECMD_INPUT_FILE):
-    pecmd_command = f'"{PECMD_PATH} -f {PECMD_INPUT_FILE} --csv {PECMD_CSV_PATH} --csvf {PECMD_OUT_FILE_NAME}"'
+    pecmd_command = f'"{PECMD_PATH}" -f "{PECMD_INPUT_FILE}" --csv "{PECMD_CSV_PATH}" --csvf "{PECMD_OUT_FILE_NAME}"'
 
     try:
         print(f"Running PECmd on {PECMD_INPUT_FILE}...")
@@ -154,7 +134,7 @@ def run_lecmd(LNK_INPUT_DIR):
     try:
         print(f"Running LECmd on {LNK_INPUT_DIR}...")
         subprocess.run(lnk_command, shell=True, check=True)
-        print(f"Registry parsed successfully! Output saved to: {LECMD_CSV_PATH}")
+        print(f"Link directory parsed successfully! Output saved to: {LECMD_CSV_PATH}")
     except subprocess.CalledProcessError as e:
         print(f"Error running LECmd: {e}")
 
@@ -164,15 +144,36 @@ def adjust_column_widths(writer, df, sheet_name):
         max_len = max(df[col].astype(str).map(len).max(), len(col)) + 2
         worksheet.set_column(i, i, max_len)
 
-def create_timeline(recmd_csv, pecmd_csv, lecmd_csv, output_csv):
-    # Read CSV files if they exist
-    df_recmd = pd.read_csv(recmd_csv) if recmd_csv and os.path.exists(recmd_csv) else pd.DataFrame()
-    df_pecmd = pd.read_csv(pecmd_csv) if pecmd_csv and os.path.exists(pecmd_csv) else pd.DataFrame()
-    df_lecmd = pd.read_csv(lecmd_csv) if lecmd_csv and os.path.exists(lecmd_csv) else pd.DataFrame()
-    
+
+def create_timeline(output_dir):
+    # Ensure output directory exists
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
+
+    # Set final output filename inside the given directory
+    output_file = os.path.join(output_dir, "forensic_timeline.xlsx")
+
+    # Validate CSV files to ensure they are actual files, not directories
+    recmd_csv = RECMD_OUT_FILE_NAME if os.path.isfile(RECMD_OUT_FILE_NAME) else None
+    pecmd_csv = PECMD_OUT_FILE_NAME if os.path.isfile(PECMD_OUT_FILE_NAME) else None
+    lecmd_csv = LECMD_OUT_FILE_NAME if os.path.isfile(LECMD_OUT_FILE_NAME) else None
+
+    # Display warnings if any file is missing
+    if not recmd_csv:
+        print(f"Warning: RECmd CSV file is missing or invalid: {recmd_csv}")
+    if not pecmd_csv:
+        print(f"Warning: PECmd CSV file is missing or invalid: {pecmd_csv}")
+    if not lecmd_csv:
+        print(f"Warning: LECmd CSV file is missing or invalid: {lecmd_csv}")
+
+    # Read only valid CSV files
+    df_recmd = pd.read_csv(recmd_csv) if recmd_csv else pd.DataFrame()
+    df_pecmd = pd.read_csv(pecmd_csv) if pecmd_csv else pd.DataFrame()
+    df_lecmd = pd.read_csv(lecmd_csv) if lecmd_csv else pd.DataFrame()
+
     # Merge DataFrames
     final_df = pd.concat([df_recmd, df_pecmd, df_lecmd], ignore_index=True)
-    
+
     # Check if 'Timestamp' column exists
     if 'Timestamp' not in final_df.columns:
         print("Error: 'Timestamp' column not found in the CSV files.")
@@ -185,12 +186,12 @@ def create_timeline(recmd_csv, pecmd_csv, lecmd_csv, output_csv):
     # Sort by UTC+0000
     final_df = final_df.sort_values(by="UTC+0000", ascending=True)
     
-    # Save the final timeline in Excel with adjusted column sizes
-    with pd.ExcelWriter(output_csv, engine='xlsxwriter') as writer:
+    # Save the final timeline in Excel
+    with pd.ExcelWriter(output_file, engine='xlsxwriter') as writer:
         final_df.to_excel(writer, sheet_name='Timeline', index=False)
         adjust_column_widths(writer, final_df, 'Timeline')
     
-    print(f"Timeline saved to {output_csv}")
+    print(f"Timeline saved to {output_file}")
     
     # Delete the original CSV files
     for csv_file in [recmd_csv, pecmd_csv, lecmd_csv]:
@@ -198,11 +199,13 @@ def create_timeline(recmd_csv, pecmd_csv, lecmd_csv, output_csv):
             os.remove(csv_file)
             print(f"Deleted {csv_file}")
 
-def runAllTools1(LECMD_INPUT_FILE, PECMD_INPUT_FILE, REGISTRY_INPUT_FILE, REGISTRY_BATCH_FILE):
-    run_lecmd(LECMD_INPUT_FILE)
-    run_recmd(REGISTRY_INPUT_FILE, REGISTRY_BATCH_FILE)
-    run_pecmd(PECMD_INPUT_FILE)
-    create_timeline(REGISTRY_CSV_PATH, PECMD_CSV_PATH, LECMD_CSV_PATH, FINAL_CSV_PATH)
+
+
+def runAllTools1(LECMD_INPUT_FILE, PECMD_INPUT_FILE, REGISTRY_INPUT_FILE):
+    #run_lecmd(LECMD_INPUT_FILE)
+    run_sbecmd(REGISTRY_INPUT_FILE)
+    #run_pecmd(PECMD_INPUT_FILE)
+    #create_timeline(FINAL_CSV_PATH)
 
 
 def header():
@@ -224,8 +227,7 @@ def main():
         LECMD_INPUT_FILE, REGISTRY_INPUT_FILE,  PECMD_INPUT_FILE = getFileInputNames()
         print(LECMD_INPUT_FILE)
         time.sleep(1)
-        REGISTRY_BATCH_FILE = getUserInputBatchFilters()
-        runAllTools1(LECMD_INPUT_FILE, PECMD_INPUT_FILE, REGISTRY_INPUT_FILE, REGISTRY_BATCH_FILE)
+        runAllTools1(LECMD_INPUT_FILE, PECMD_INPUT_FILE, REGISTRY_INPUT_FILE)
     
     if val == "2":
         print("\nNOTE: Ensure that LIVE files are not scanned as the EvtxECmd Tool does not allow it.")

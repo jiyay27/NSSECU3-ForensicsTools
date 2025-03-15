@@ -1,0 +1,9 @@
+[21:12:04.179 INF] SBECmd version 2.1.0.0
+
+Author: Eric Zimmerman (saericzimmerman@gmail.com)
+https://github.com/EricZimmerman
+[21:12:04.198 INF] Command line: -d D:\Users\John\Documents\1_GitHub\SECU3-Tools\NSSECU3-ForensicsTools\ --csv ./
+[21:12:04.198 INF] Directory to process: D:\Users\John\Documents\1_GitHub\SECU3-Tools\NSSECU3-ForensicsTools\
+[21:12:04.199 INF] Deduplication: false
+[21:12:04.202 INF] All messages will be saved to D:\Users\John\Documents\1_GitHub\SECU3-Tools\NSSECU3-ForensicsTools\SBECmd\!SBECmd_Messages.txt
+[21:12:04.237 INF] Nothing found to process
