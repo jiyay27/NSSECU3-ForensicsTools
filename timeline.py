@@ -59,19 +59,14 @@ def check_path_exists(path):
             return path
     return "Not Found"
 
-def getFileInputDirectory(lnk_dir, reg_dir, pf_dir):
+def getFileInputDirectory(lnk_dir, sbe_dir, pf_dir):
     
     print("\n--- Detected Directory Files ---")
     print("LNK dir: " + check_path_exists(lnk_dir))
-    print("REG dir: " + check_path_exists(reg_dir))
+    print("SBE dir: " + check_path_exists(sbe_dir))
     print("PF dir: " + check_path_exists(pf_dir))
     print("---       END      ---\n")
 
-    if check_path_exists(pf_dir) != "Not Found":
-        return 1
-    else:
-        return 0
-    
 def getFileInputNames():
     directory = os.path.dirname(os.path.abspath(__file__))
 
@@ -164,70 +159,10 @@ def adjust_column_widths(writer, df, sheet_name):
         max_len = max(df[col].astype(str).map(len).max(), len(col)) + 2
         worksheet.set_column(i, i, max_len)
 
-def create_timeline(output_dir):
-    # Ensure output directory exists
-    if not os.path.exists(output_dir):
-        os.makedirs(output_dir)
-
-    sbecmd_csv = get_latest_shellb_output_file()
-    PECMD_OUT_FILE_NAME = PECMD_OUT_FILE_NAME2
-
-    # Set final output filename inside the given directory
-    output_file = os.path.join(output_dir, "forensic_timeline.xlsx")
-
-    # Validate CSV files to ensure they are actual files, not directories
-    sbecmd_csv = sbecmd_csv if os.path.isfile(sbecmd_csv) else None
-    pecmd_csv = PECMD_OUT_FILE_NAME if os.path.isfile(PECMD_OUT_FILE_NAME) else None
-    lecmd_csv = LECMD_OUT_FILE_NAME if os.path.isfile(LECMD_OUT_FILE_NAME) else None
-
-    # Display warnings if any file is missing
-    if not sbecmd_csv:
-        print(f"Warning: RECmd CSV file is missing or invalid: {sbecmd_csv}")
-    if not pecmd_csv:
-        print(f"Warning: PECmd CSV file is missing or invalid: {pecmd_csv}")
-    if not lecmd_csv:
-        print(f"Warning: LECmd CSV file is missing or invalid: {lecmd_csv}")
-
-    # Read only valid CSV files
-    df_sbecmd = pd.read_csv(sbecmd_csv) if sbecmd_csv else pd.DataFrame()
-    df_pecmd = pd.read_csv(pecmd_csv) if pecmd_csv else pd.DataFrame()
-    df_lecmd = pd.read_csv(lecmd_csv) if lecmd_csv else pd.DataFrame()
-
-    # Merge DataFrames
-    final_df = pd.concat([df_sbecmd, df_pecmd, df_lecmd], ignore_index=True)
-
-    # Check if 'Timestamp' column exists
-    if 'Timestamp' not in final_df.columns:
-        print("Error: 'Timestamp' column not found in the CSV files.")
-        return
-    
-    # Convert timestamps
-    final_df["UTC+0000"] = final_df["Timestamp"].apply(convert_to_utc)
-    final_df["UTC+0800"] = final_df["UTC+0000"].apply(convert_to_utc8)
-    
-    # Sort by UTC+0000
-    final_df = final_df.sort_values(by="UTC+0000", ascending=True)
-    
-    # Save the final timeline in Excel
-    with pd.ExcelWriter(output_file, engine='xlsxwriter') as writer:
-        final_df.to_excel(writer, sheet_name='Timeline', index=False)
-        adjust_column_widths(writer, final_df, 'Timeline')
-    
-    print(f"Timeline saved to {output_file}")
-    
-    # Delete the original CSV files
-    for csv_file in [sbecmd_csv, pecmd_csv, lecmd_csv]:
-        if csv_file and os.path.exists(csv_file):
-            os.remove(csv_file)
-            print(f"Deleted {csv_file}")
-
-
-
-def runAllTools1(LECMD_INPUT_FILE, PECMD_INPUT_FILE, SBECMD_INPUT_FILE):
+def runAllTools(LECMD_INPUT_FILE, PECMD_INPUT_FILE, SBECMD_INPUT_FILE):
     run_lecmd(LECMD_INPUT_FILE)
     run_sbecmd(SBECMD_INPUT_FILE)
     run_pecmd(PECMD_INPUT_FILE)
-    #create_timeline(FINAL_CSV_PATH)
 
 
 def header():
@@ -236,7 +171,6 @@ def header():
     print("[2] Scan Files in User Specified Directory")
     print("[3] Exit")
     print("--- ---------------------- ---")
-
 
 
 def main():
@@ -249,13 +183,31 @@ def main():
         LECMD_INPUT_FILE, SBECMD_INPUT_FILE,  PECMD_INPUT_FILE = getFileInputNames()
         print(LECMD_INPUT_FILE)
         time.sleep(1)
-        runAllTools1(LECMD_INPUT_FILE, PECMD_INPUT_FILE, SBECMD_INPUT_FILE)
+        runAllTools(LECMD_INPUT_FILE, PECMD_INPUT_FILE, SBECMD_INPUT_FILE)
     
     if val == "2":
         print("\nNOTE: Ensure that LIVE files are not scanned as the EvtxECmd Tool does not allow it.")
         print("Also, write the directory name with no quotation marks (\"\") or double backslashes (\\\\).\n")
+        
+        print("--- Specify User Directory ---")
 
-    # create_timeline("Registry_Folder", "Amcache.hve", "LNK_Folder", "Final_Timeline_UTC+0800.csv")
+        # "C:\Windows\System32\winevt\Logs\Internet Explorer.evtx" - sample dir
+        sb_dir = input("SB Directory: ")
+        # "C:\Windows\Prefetch\WSL.EXE-1B26B53B.pf" - sample dir
+        pf_dir = input("PF Directory: ")
+        # "C:\Windows\System32\config\SOFTWARE" - sample dir
+        lnk_dir = input("LNK Directory: ")
+
+        print("Scanning directory for specific files...")
+        time.sleep(1)
+        getFileInputDirectory(sb_dir, pf_dir, lnk_dir)
+        time.sleep(1)
+
+        runAllTools(lnk_dir, pf_dir, sb_dir)
+
+    if val == "3":
+        print("Exiting...")
+        os._exit(0);
 
 if __name__ == "__main__":
     main()
